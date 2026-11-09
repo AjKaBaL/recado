@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recado — assistente pessoal para WhatsApp</title>
+<style>
+  :root { --fundo:#f4f6f5; --cartao:#fff; --texto:#1d2420; --suave:#64706a; --verde:#1f8f5f; --vermelho:#c0392b; --amarelo:#b7791f; --borda:#dde3df; }
+  @media (prefers-color-scheme: dark) { :root { --fundo:#111614; --cartao:#1a211e; --texto:#e7ece9; --suave:#9aa7a0; --borda:#2b3530; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, "Segoe UI", sans-serif; background:var(--fundo); color:var(--texto); }
+  header { padding:16px 20px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--borda); background:var(--cartao); flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; flex:1; }
+  .pilula { padding:4px 10px; border-radius:999px; font-size:13px; border:1px solid var(--borda); }
+  .ok { color:var(--verde); } .erro { color:var(--vermelho); } .aviso { color:var(--amarelo); }
+  nav { display:flex; gap:4px; padding:8px 20px; flex-wrap:wrap; }
+  nav button { background:none; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; color:var(--suave); font-size:14px; }
+  nav button.ativo { background:var(--cartao); color:var(--texto); font-weight:600; }
+  main { padding:0 20px 40px; max-width:1000px; margin:0 auto; }
+  section { display:none; } section.ativo { display:block; }
+  .cartao { background:var(--cartao); border:1px solid var(--borda); border-radius:12px; padding:16px; margin:12px 0; }
+  .grade { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .num { font-size:24px; font-weight:700; } .rot { color:var(--suave); font-size:13px; }
+  #qr svg { width:260px; height:260px; background:#fff; padding:8px; border-radius:8px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  td, th { padding:8px 6px; border-bottom:1px solid var(--borda); text-align:left; vertical-align:top; }
+  th { color:var(--suave); font-weight:500; }
+  input[type=search] { width:100%; padding:10px; border-radius:8px; border:1px solid var(--borda); background:var(--cartao); color:var(--texto); font-size:14px; }
+  button.acao { padding:8px 14px; border-radius:8px; border:1px solid var(--borda); background:var(--cartao); color:var(--texto); cursor:pointer; }
+  .alternar { display:flex; gap:8px; margin:12px 0 0; flex-wrap:wrap; }
+  .alternar button { padding:10px 18px; border-radius:999px; border:1px solid var(--borda); background:var(--cartao); color:var(--texto); cursor:pointer; font-size:15px; }
+  .alternar button.ativo { background:var(--verde); border-color:var(--verde); color:#fff; font-weight:600; }
+  button.acao:disabled { opacity:.45; cursor:default; }
+  button.perigo { border-color:var(--vermelho); color:var(--vermelho); }
+  .msg-texto { white-space:pre-wrap; word-break:break-word; }
+  ol li { margin:6px 0; }
+  code { background:var(--fundo); padding:1px 5px; border-radius:4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🤖 Recado <span class="rot" style="font-size:.55em;font-weight:400">assistente pessoal para WhatsApp</span></h1>
+  <span id="p-conexao" class="pilula">…</span>
+  <span id="p-ia" class="pilula">IA …</span>
+  <span id="p-envio" class="pilula">Envio …</span>
+</header>
+<nav>
+  <button data-aba="geral" class="ativo">Visão geral</button>
+  <button data-aba="conversas">Conversas</button>
+  <button data-aba="mensagens">Mensagens</button>
+  <button data-aba="pendencias">Pendências</button>
+  <button data-aba="config">Configurações</button>
+</nav>
+<main>
+  <section id="geral" class="ativo">
+    <div class="cartao" id="cartao-qr" style="display:none">
+      <h2>Conectar o WhatsApp</h2>
+      <ol>
+        <li>No celular, abra o WhatsApp.</li>
+        <li>Toque em <b>⋮ (Mais opções)</b> → <b>Aparelhos conectados</b> → <b>Conectar um aparelho</b>.</li>
+        <li>Aponte a câmera para o código abaixo.</li>
+      </ol>
+      <div id="qr"></div>
+      <p class="rot">O código muda sozinho a cada poucos segundos. Ele não é guardado em lugar nenhum.</p>
+    </div>
+    <div class="cartao" id="cartao-ativar" style="display:none">
+      <h2>Falta só um passo: ativar os avisos</h2>
+      <p>No WhatsApp do celular, abra <b id="onde-ativar">a conversa com você mesmo</b> e envie: <code id="cmd-ativar">!ativar</code></p>
+      <p class="rot">Isso prova qual é a conversa do assistente. Ele só envia mensagens para ela — nunca para outras pessoas.
+        Para trocar a conversa, vá em <b>Configurações</b>.</p>
+      <p class="erro" id="erro-ativar"></p>
+    </div>
+    <div class="cartao">
+      <div id="evento" class="rot"></div>
+      <div class="grade" style="margin-top:12px">
+        <div><div class="num" id="c-conta">—</div><div class="rot">Conta</div></div>
+        <div><div class="num" id="c-conversas">0</div><div class="rot">Conversas (monitoradas)</div></div>
+        <div><div class="num" id="c-msgs">0</div><div class="rot">Mensagens guardadas</div></div>
+        <div><div class="num" id="c-audios">0</div><div class="rot">Áudios transcritos</div></div>
+        <div><div class="num" id="c-ultima">—</div><div class="rot">Última mensagem</div></div>
+      </div>
+      <p class="rot" id="historico"></p>
+    </div>
+    <div class="cartao">
+      <h3 style="margin-top:0">Pendências abertas</h3>
+      <div id="resumo-pend" class="rot">Nenhuma.</div>
+    </div>
+  </section>
+
+  <section id="conversas">
+    <div class="cartao">
+      <p class="rot">Desmarque <b>Ler</b> nas conversas que o assistente NÃO deve ler. Marque ⭐ nas prioritárias.
+        Desmarcar não apaga o que já foi guardado.</p>
+      <p class="rot"><b>+50 antigas</b> pede ao seu celular as 50 mensagens anteriores à mais antiga guardada.
+        <b>Buscar tudo</b> repete o pedido sozinho até chegar ao começo da conversa (pode levar vários minutos em grupos grandes).
+        O celular precisa estar ligado e com internet. Nada é enviado para a conversa nem para outras pessoas.
+        Áudios antigos não são transcritos.</p>
+      <p><button class="acao" id="bt-buscar-todas">Buscar tudo de todas as conversas com Ler marcado</button>
+         <button class="acao" id="bt-parar-busca" style="display:none">Parar a busca</button></p>
+      <p id="busca-tudo" class="msg-texto"></p>
+      <input type="search" id="busca-conv" placeholder="Pesquisar conversa…">
+      <div class="alternar">
+        <button id="ver-grupos" class="ativo">👥 Grupos <span id="n-grupos-bt"></span></button>
+        <button id="ver-contatos">👤 Contatos <span id="n-contatos-bt"></span></button>
+      </div>
+      <p class="rot" id="aviso-antigas"></p>
+    </div>
+    <div class="cartao" id="cartao-grupos">
+      <h3 style="margin-top:0">👥 Grupos <span class="rot" id="n-grupos"></span></h3>
+      <p><button class="acao" data-todos="grupos" data-ler="1">Ler todos</button>
+         <button class="acao" data-todos="grupos" data-ler="0">Não ler nenhum</button></p>
+      <table><thead><tr><th>Ler</th><th>⭐</th><th>Grupo</th><th>Msgs</th><th>Guardado desde</th><th>Última</th><th></th></tr></thead><tbody id="lista-grupos"></tbody></table>
+    </div>
+    <div class="cartao" id="cartao-contatos" style="display:none">
+      <h3 style="margin-top:0">👤 Contatos <span class="rot" id="n-contatos"></span></h3>
+      <p class="rot">Nome da sua agenda quando o contato está salvo; senão, <b>~nome</b> que a pessoa colocou no WhatsApp.
+        <button class="acao" id="bt-nomes">Atualizar nomes</button> <span id="info-nomes"></span></p>
+      <p><button class="acao" data-todos="contatos" data-ler="1">Ler todos</button>
+         <button class="acao" data-todos="contatos" data-ler="0">Não ler nenhum</button></p>
+      <table><thead><tr><th>Ler</th><th>⭐</th><th>Contato</th><th>Número</th><th>Msgs</th><th>Guardado desde</th><th>Última</th><th></th></tr></thead><tbody id="lista-contatos"></tbody></table>
+    </div>
+  </section>
+
+  <section id="mensagens">
+    <div class="cartao">
+      <input type="search" id="busca-msg" placeholder="Buscar em todas as conversas e datas (Enter)…">
+      <table><thead><tr><th>Quando</th><th>Conversa</th><th>Quem</th><th>Mensagem</th></tr></thead><tbody id="lista-msg"></tbody></table>
+    </div>
+  </section>
+
+  <section id="pendencias">
+    <div class="cartao">
+      <p><button class="acao" id="bt-excluir-todas">Excluir todas</button> <span class="rot" id="aviso-pend"></span></p>
+      <table><thead><tr><th>#</th><th>Tipo</th><th>Descrição</th><th>Prazo</th><th>Conversa</th><th>Estado</th><th></th></tr></thead><tbody id="lista-pend"></tbody></table>
+    </div>
+  </section>
+
+  <section id="config">
+    <div class="cartao">
+      <h3 style="margin-top:0">Conversa do assistente</h3>
+      <p class="rot">Onde o assistente manda os avisos e onde você escreve os comandos.</p>
+      <p><select id="sel-conversa"></select> <button class="acao" id="bt-conversa">Salvar</button></p>
+      <p class="rot">Pode ser a conversa com você mesmo ou um grupo em que <b>só você</b> participa
+        (crie o grupo, depois remova a outra pessoa). Se o grupo tiver mais alguém, o assistente se recusa a enviar.
+        Depois de trocar, mande <code>!ativar</code> na conversa escolhida. O grupo só aparece na lista depois que chegar
+        alguma mensagem nele.</p>
+      <p class="rot" id="info-conversa"></p>
+    </div>
+    <div class="cartao">
+      <h3 style="margin-top:0">Segundo número (para o celular tocar)</h3>
+      <p class="rot">Mensagens que saem da sua própria conta não fazem o celular tocar. Com um segundo número de
+        WhatsApp (outro chip, eSIM ou o WhatsApp Business com outro número), os avisos chegam dele para você como uma
+        conversa normal, com som. O assistente continua lendo pela sua conta; o segundo número <b>só</b> manda
+        mensagens para o seu número principal e não lê nada. Você também pode escrever os comandos (<code>!pergunta</code>…) na conversa com ele.</p>
+      <p id="seg-info" class="rot">Desligado.</p>
+      <div id="seg-qr" style="display:none;background:#fff;padding:8px;width:max-content;border-radius:8px"></div>
+      <p><button class="acao" id="bt-seg-ligar">Ligar segundo número</button>
+        <button class="acao perigo" id="bt-seg-desligar" style="display:none">Desligar e desvincular</button></p>
+    </div>
+    <div class="cartao">
+      <h3 style="margin-top:0">Assistente</h3>
+      <p><label><input type="checkbox" id="ck-windows"> Abrir o assistente sozinho quando o Windows ligar</label></p>
+      <p><label><input type="checkbox" id="ck-notificar"> Mostrar os avisos também como notificação do Windows</label>
+        <button class="acao" id="bt-testar-notif">Testar notificação</button></p>
+      <p class="rot">Alertas e lembretes aparecem no canto da tela (e ficam na Central de Notificações). Clique na notificação para abrir este painel.
+        No horário de silêncio só aparecem os avisos urgentes.</p>
+      <p><button class="acao" id="bt-fechar">Fechar o assistente</button></p>
+      <p class="rot">O assistente fica rodando escondido, no ícone verde perto do relógio (pode estar na setinha ^).
+        Clique no ícone para abrir este painel; botão direito para fechar.</p>
+    </div>
+    <div class="cartao">
+      <h3 style="margin-top:0">Leitura</h3>
+      <button class="acao" id="bt-pausar">Pausar</button>
+      <p class="rot">Pausado, o assistente continua conectado mas não lê nem guarda mensagens.</p>
+    </div>
+    <div class="cartao">
+      <h3 style="margin-top:0">Ferramentas locais</h3>
+      <p id="info-pc" class="rot"></p>
+      <p id="info-ferr" class="rot"></p>
+      <p class="rot">Outras opções (horário do resumo diário, horário de silêncio, modelo da IA) ficam no arquivo
+        <code>config.toml</code> na pasta <code id="pasta"></code>. Feche o assistente antes de editar.</p>
+    </div>
+    <div class="cartao">
+      <h3 style="margin-top:0">Privacidade</h3>
+      <p><button class="acao perigo" id="bt-apagar">Apagar todo o histórico guardado</button></p>
+      <p><button class="acao perigo" id="bt-desconectar">Desconectar do WhatsApp e apagar a sessão</button></p>
+      <p class="rot">Aviso: a conexão usa uma biblioteca NÃO oficial do WhatsApp Web. Ela pode cair quando o WhatsApp muda, e não há garantia contra bloqueio da conta.</p>
+    </div>
+  </section>
+</main>
+<script>
+const H = { "Content-Type": "application/json", "X-Assistente": "1" };
+const $ = id => document.getElementById(id);
+const fmt = ts => ts ? new Date(ts * 1000).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }) : "—";
+function el(tag, txt, cls) { const e = document.createElement(tag); if (txt !== undefined) e.textContent = txt; if (cls) e.className = cls; return e; }
+function pilula(id, txt, ok) { const p = $(id); p.textContent = txt; p.className = "pilula " + (ok ? "ok" : "erro"); }
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button, section").forEach(x => x.classList.remove("ativo"));
+  b.classList.add("ativo"); $(b.dataset.aba).classList.add("ativo");
+  if (b.dataset.aba === "conversas") { carregarConversas(); acompanharBusca(); }
+  if (b.dataset.aba === "mensagens") carregarMensagens();
+  if (b.dataset.aba === "pendencias") carregarPendencias();
+  if (b.dataset.aba === "config") carregarGrupos();
+});
+
+let pausado = false;
+async function atualizar() {
+  try {
+    const r = await fetch("/api/estado"); const d = await r.json();
+    const c = d.conexao;
+    pilula("p-conexao", c.conectado ? "Conectado" : (c.logado ? "Reconectando…" : "Desconectado"), c.conectado);
+    pilula("p-ia", d.ia_disponivel ? "IA local ok" : "IA indisponível", d.ia_disponivel);
+    pilula("p-envio", d.envio_habilitado ? "Avisos ativos" : "Avisos não ativados", d.envio_habilitado);
+    $("evento").textContent = c.ultimo_evento || "";
+    $("cartao-qr").style.display = d.qr_svg ? "block" : "none";
+    if (d.qr_svg) $("qr").innerHTML = d.qr_svg; // SVG gerado pelo próprio programa
+    $("cartao-ativar").style.display = (c.conectado && !d.envio_habilitado) ? "block" : "none";
+    $("cmd-ativar").textContent = d.prefixo + "ativar";
+    const ca = d.conversa_assistente;
+    $("onde-ativar").textContent = ca.tipo === "grupo" ? "o grupo \u201c" + ca.nome + "\u201d" : "a conversa com você mesmo (procure seu próprio nome ou \u201cVocê\u201d)";
+    $("erro-ativar").textContent = d.erro_ativacao ? "Última tentativa falhou: " + d.erro_ativacao : "";
+    $("info-conversa").textContent = "Agora: " + (ca.tipo === "grupo" ? "grupo \u201c" + ca.nome + "\u201d" : "conversa comigo mesmo")
+      + (d.envio_habilitado ? " — avisos ativos ✅" : " — falta mandar " + d.prefixo + "ativar lá")
+      + (ca.tipo !== "grupo" && d.grupo_configurado ? ". Esperando chegar uma mensagem no grupo \u201c" + d.grupo_configurado + "\u201d para usá-lo." : "");
+    conversaAtual = ca.jid;
+    if (document.activeElement !== $("ck-windows")) $("ck-windows").checked = d.iniciar_com_windows;
+    if (document.activeElement !== $("ck-notificar")) $("ck-notificar").checked = d.notificar_windows;
+    const sg = d.segundo;
+    $("seg-info").textContent = !sg.ligado ? "Desligado." + (sg.estado.ultimo_evento ? " " + sg.estado.ultimo_evento : "") : (sg.estado.conectado ? "✅ Conectado (" + sg.estado.conta_mascarada + "). Os avisos saem por este número." : (sg.estado.ultimo_evento || "Iniciando…"));
+    $("seg-qr").style.display = sg.ligado && sg.qr_svg ? "block" : "none";
+    if (sg.ligado && sg.qr_svg) $("seg-qr").innerHTML = sg.qr_svg; // SVG gerado pelo próprio programa
+    $("bt-seg-ligar").style.display = sg.ligado ? "none" : "inline-block";
+    $("bt-seg-desligar").style.display = sg.ligado ? "inline-block" : "none";
+    $("c-conta").textContent = c.nome_conta ? c.nome_conta : (c.conta_mascarada || "—");
+    $("c-conversas").textContent = d.contadores.conversas + " (" + d.contadores.monitoradas + ")";
+    $("c-msgs").textContent = d.contadores.mensagens;
+    $("c-audios").textContent = d.contadores.audios_transcritos + (d.contadores.audios_pendentes ? " (+" + d.contadores.audios_pendentes + " na fila)" : "");
+    $("c-ultima").textContent = fmt(c.ultima_msg);
+    $("historico").textContent = d.contadores.historico_msgs
+      ? "Histórico importado do celular: " + d.contadores.historico_msgs + " mensagens (" + d.historico_periodo + ")" + (c.historico_progresso != null ? " — " + c.historico_progresso + "%" : "")
+      : (c.historico_progresso != null ? "Recebendo histórico do celular… " + c.historico_progresso + "%" : "O histórico antigo só chega se o celular enviar ao vincular; nem todo histórico fica disponível.");
+    pausado = d.pausado; $("bt-pausar").textContent = pausado ? "Retomar leitura" : "Pausar leitura";
+    $("pasta").textContent = d.pasta_dados;
+    $("info-pc").textContent = "Este computador: " + d.computador + ". "
+      + (d.ajuste_automatico ? "Ajuste automático: IA " + d.ia_modelo + (d.ia_pensar ? " (pensando antes de analisar)" : " (sem “pensar”, mais rápido)") + "."
+                             : "Ajuste manual (ajuste_automatico = false no config.toml).")
+      + (d.ia_baixando ? " Baixando o modelo da IA: " + d.ia_baixando : "");
+    $("info-ferr").textContent = "Transcrição de áudio: " + (d.transcricao_disponivel ? "pronta" : "não instalada") + " · IA: modelo " + d.ia_modelo + (d.ia_disponivel ? " (ok)" : " (Ollama não respondeu ou modelo ausente)");
+  } catch (e) { pilula("p-conexao", "Assistente fechado", false); }
+}
+
+const fmtDia = ts => ts ? new Date(ts * 1000).toLocaleDateString("pt-BR") : "—";
+// Número só existe nos contatos "@s.whatsapp.net"; nos "@lid" o WhatsApp esconde o número.
+function numero(c) {
+  const u = c.numero || (c.jid.endsWith("@s.whatsapp.net") ? c.jid.split("@")[0] : "");
+  if (!u) return "(oculto pelo WhatsApp)";
+  return u.length > 4 ? "+" + u.slice(0, 2) + " " + u.slice(2, 4) + " " + u.slice(4) : u;
+}
+let listaConversas = [];
+async function carregarConversas() {
+  const q = encodeURIComponent($("busca-conv").value);
+  listaConversas = await (await fetch("/api/conversas?q=" + q)).json();
+  const grupos = listaConversas.filter(c => c.grupo), contatos = juntarPorNumero(listaConversas.filter(c => !c.grupo));
+  $("n-grupos").textContent = "(" + grupos.length + ", lendo " + grupos.filter(c => c.monitorada).length + ")";
+  $("n-contatos").textContent = "(" + contatos.length + ", lendo " + contatos.filter(c => c.monitorada).length + ")";
+  $("n-grupos-bt").textContent = "(" + grupos.length + ")";
+  $("n-contatos-bt").textContent = "(" + contatos.length + ")";
+  preencher($("lista-grupos"), grupos, false);
+  preencher($("lista-contatos"), contatos, true);
+}
+// O WhatsApp às vezes guarda a mesma pessoa duas vezes (pelo número e por um código
+// "@lid"). Aqui as duas viram uma linha só; marcar "Ler" vale para as duas.
+function juntarPorNumero(lista) {
+  const porNumero = new Map(), saida = [];
+  for (const c of lista) {
+    const u = c.numero || (c.jid.endsWith("@s.whatsapp.net") ? c.jid.split("@")[0] : "");
+    const j = u && porNumero.get(u);
+    if (!j) { const n = { ...c, jids: [c.jid], partes: [c] }; if (u) porNumero.set(u, n); saida.push(n); continue; }
+    j.jids.push(c.jid); j.partes.push(c);
+    if (!j.nome_da_agenda && (c.nome_da_agenda || (!j.nome && c.nome))) { j.nome = c.nome; j.nome_da_agenda = c.nome_da_agenda; }
+    j.monitorada = j.monitorada || c.monitorada;
+    j.prioridade = Math.max(j.prioridade, c.prioridade);
+    j.total_msgs += c.total_msgs;
+    if (c.primeira_msg && (!j.primeira_msg || c.primeira_msg < j.primeira_msg)) j.primeira_msg = c.primeira_msg;
+    if (c.ultima_msg && (!j.ultima_msg || c.ultima_msg > j.ultima_msg)) j.ultima_msg = c.ultima_msg;
+  }
+  // Os botões de buscar antigas usam a parte com mais mensagens.
+  for (const n of saida) if (n.partes.length > 1) n.jid = n.partes.reduce((a, b) => b.total_msgs > a.total_msgs ? b : a).jid;
+  return saida;
+}
+function preencher(tb, lista, ehContato) {
+  tb.replaceChildren();
+  for (const c of lista) {
+    const tr = el("tr");
+    const ler = el("input"); ler.type = "checkbox"; ler.checked = c.monitorada;
+    const pri = el("input"); pri.type = "checkbox"; pri.checked = c.prioridade > 0;
+    const salvar = async () => {
+      c.monitorada = ler.checked;
+      for (const jid of (c.jids || [c.jid]))
+        await fetch("/api/conversas/monitorar", { method:"POST", headers:H, body: JSON.stringify({ jid, monitorada:ler.checked, prioridade: pri.checked ? 1 : 0 }) });
+    };
+    ler.onchange = salvar; pri.onchange = salvar;
+    const t1 = el("td"); t1.append(ler); const t2 = el("td"); t2.append(pri);
+    const bt = el("button", "+50 antigas", "acao"); bt.disabled = !c.total_msgs;
+    bt.title = c.total_msgs ? "Pedir ao celular as 50 mensagens anteriores" : "Ainda não há mensagens desta conversa";
+    bt.onclick = () => buscarAntigas(c, bt);
+    const bt2 = el("button", "Buscar tudo", "acao"); bt2.disabled = !c.total_msgs;
+    bt2.onclick = () => buscarTudo(c);
+    const t9 = el("td"); t9.style.whiteSpace = "nowrap"; t9.append(bt, " ", bt2);
+    // Como no WhatsApp: "~Nome" quando é o nome que a pessoa pôs, sem estar salvo na agenda.
+    const nome = c.nome ? (ehContato && !c.nome_da_agenda ? "~" + c.nome : c.nome) : (ehContato ? "(sem nome)" : c.jid.split("@")[0]);
+    const tdNome = el("td", nome);
+    if (ehContato) tdNome.title = c.nome_da_agenda ? "Nome salvo na sua agenda" : "Nome que a pessoa colocou no WhatsApp (não está na sua agenda)";
+    tr.append(t1, t2, tdNome);
+    if (ehContato) tr.append(el("td", numero(c)));
+    tr.append(el("td", c.total_msgs), el("td", fmtDia(c.primeira_msg)), el("td", fmt(c.ultima_msg)), t9);
+    tb.append(tr);
+  }
+}
+async function buscarAntigas(c, bt) {
+  bt.disabled = true; const antes = c.primeira_msg;
+  $("aviso-antigas").textContent = "Pedindo ao celular mensagens antigas de \u201c" + (c.nome || "conversa") + "\u201d…";
+  const r = await fetch("/api/conversas/buscar-antigas", { method:"POST", headers:H, body: JSON.stringify({ jid:c.jid }) });
+  if (!r.ok) { $("aviso-antigas").textContent = "Não deu: " + await r.text(); bt.disabled = false; return; }
+  // O celular responde em alguns segundos: conferir até 40 s se chegou algo.
+  for (let i = 0; i < 8; i++) {
+    await new Promise(ok => setTimeout(ok, 5000));
+    const l = await (await fetch("/api/conversas?q=")).json();
+    const n = l.find(x => x.jid === c.jid);
+    if (n && n.primeira_msg && (!antes || n.primeira_msg < antes)) {
+      $("aviso-antigas").textContent = "Chegaram mensagens! Agora guardado desde " + fmtDia(n.primeira_msg) + " (" + n.total_msgs + " mensagens).";
+      carregarConversas(); return;
+    }
+  }
+  $("aviso-antigas").textContent = "O celular não mandou mensagens mais antigas (pode não ter mais, estar desligado ou sem internet). Tente de novo mais tarde.";
+  bt.disabled = false;
+}
+async function buscarTudo(c) {
+  if (!confirm("Buscar TODAS as mensagens antigas de \u201c" + (c.nome || "conversa") + "\u201d? Em grupos grandes pode levar vários minutos. Deixe o celular ligado e com internet.")) return;
+  const r = await fetch("/api/conversas/buscar-tudo", { method:"POST", headers:H, body: JSON.stringify({ jid:c.jid }) });
+  if (!r.ok) { $("busca-tudo").textContent = "Não deu: " + await r.text(); return; }
+  acompanharBusca();
+}
+let acompanhando = null;
+async function acompanharBusca() {
+  const b = await (await fetch("/api/conversas/busca")).json();
+  if (b.nome !== undefined) $("busca-tudo").textContent = "\u201c" + (b.nome || "conversa") + "\u201d: " + b.texto;
+  $("bt-parar-busca").style.display = b.ativa ? "inline-block" : "none";
+  $("bt-buscar-todas").style.display = b.ativa ? "none" : "inline-block";
+  clearTimeout(acompanhando);
+  if (b.ativa) acompanhando = setTimeout(acompanharBusca, 3000);
+  else if (b.novas) carregarConversas();
+}
+$("bt-nomes").onclick = async () => {
+  $("bt-nomes").disabled = true; $("info-nomes").textContent = "Buscando nomes da agenda e números…";
+  const r = await fetch("/api/conversas/atualizar-nomes", { method:"POST", headers:H });
+  $("info-nomes").textContent = r.ok ? "Pronto!" : "Não deu: " + await r.text();
+  $("bt-nomes").disabled = false; carregarConversas();
+};
+$("bt-buscar-todas").onclick = async () => {
+  const n = listaConversas.filter(c => c.monitorada && c.total_msgs > 0).length;
+  if (!confirm("Buscar as mensagens antigas de " + n + " conversas com Ler marcado, uma depois da outra? Pode levar bastante tempo (cerca de 3 s a cada 50 mensagens). Deixe o celular ligado e com internet. Dá para parar quando quiser.")) return;
+  const r = await fetch("/api/conversas/buscar-tudo", { method:"POST", headers:H, body: JSON.stringify({ todas: true }) });
+  if (!r.ok) { $("busca-tudo").textContent = "Não deu: " + await r.text(); return; }
+  acompanharBusca();
+};
+$("bt-parar-busca").onclick = async () => { await fetch("/api/conversas/parar-busca", { method:"POST", headers:H }); };
+document.querySelectorAll("[data-todos]").forEach(b => b.onclick = async () => {
+  const grupo = b.dataset.todos === "grupos", ler = b.dataset.ler === "1";
+  const alvo = listaConversas.filter(c => c.grupo === grupo);
+  if (!alvo.length) return;
+  const filtro = $("busca-conv").value.trim();
+  if (!confirm((ler ? "Ler" : "Parar de ler") + " " + (grupo ? alvo.length : juntarPorNumero(alvo).length) + (grupo ? " grupos" : " contatos") + (filtro ? " que aparecem na pesquisa \u201c" + filtro + "\u201d" : "") + "?")) return;
+  await fetch("/api/conversas/monitorar-varias", { method:"POST", headers:H, body: JSON.stringify({ jids: alvo.map(c => c.jid), monitorada: ler }) });
+  carregarConversas();
+});
+function verLista(qual) {
+  try { localStorage.setItem("lista-conversas", qual); } catch (e) {}
+  $("ver-grupos").classList.toggle("ativo", qual === "grupos");
+  $("ver-contatos").classList.toggle("ativo", qual === "contatos");
+  $("cartao-grupos").style.display = qual === "grupos" ? "block" : "none";
+  $("cartao-contatos").style.display = qual === "contatos" ? "block" : "none";
+}
+$("ver-grupos").onclick = () => verLista("grupos");
+$("ver-contatos").onclick = () => verLista("contatos");
+try { verLista(localStorage.getItem("lista-conversas") === "contatos" ? "contatos" : "grupos"); } catch (e) {}
+$("busca-conv").oninput = carregarConversas;
+
+async function carregarMensagens() {
+  const q = encodeURIComponent($("busca-msg").value);
+  const lista = await (await fetch("/api/mensagens?q=" + q)).json();
+  const tb = $("lista-msg"); tb.replaceChildren();
+  for (const m of lista) {
+    const tr = el("tr");
+    const texto = m.texto ?? "(" + m.tipo + ")";
+    tr.append(el("td", fmt(m.data)), el("td", m.nome_chat), el("td", m.de_mim ? "Eu" : m.nome_remetente),
+      el("td", (m.tipo === "audio" ? "🎤 " : "") + texto, "msg-texto"));
+    tb.append(tr);
+  }
+}
+$("busca-msg").onkeydown = e => { if (e.key === "Enter") carregarMensagens(); };
+
+async function carregarPendencias() {
+  const lista = await (await fetch("/api/pendencias")).json();
+  const tb = $("lista-pend"); tb.replaceChildren();
+  const abertas = [];
+  for (const p of lista) {
+    const tr = el("tr");
+    const prazo = p.prazo ? fmt(p.prazo) : (p.prazo_texto || "—");
+    const bx = el("button", "Excluir", "acao");
+    bx.onclick = async () => {
+      if (!confirm("Excluir a pendência " + p.id + "?\n\n" + p.descricao)) return;
+      await excluirPendencias({ id: p.id });
+    };
+    const tx = el("td"); tx.append(bx);
+    tr.append(el("td", p.id), el("td", p.tipo + " · " + p.importancia), el("td", p.descricao, "msg-texto"), el("td", prazo), el("td", p.nome_chat), el("td", p.estado), tx);
+    tb.append(tr);
+    if (p.estado === "pendente") abertas.push("[" + p.id + "] " + p.descricao + (p.prazo || p.prazo_texto ? " — " + prazo : ""));
+  }
+  $("resumo-pend").textContent = abertas.length ? abertas.slice(0, 10).join("\n") : "Nenhuma.";
+  $("resumo-pend").className = "msg-texto";
+}
+
+let conversaAtual = "propria";
+async function carregarGrupos() {
+  const g = await (await fetch("/api/grupos")).json();
+  const s = $("sel-conversa"); const antes = s.value || conversaAtual; s.replaceChildren();
+  const o = el("option", "Conversa comigo mesmo"); o.value = "propria"; s.append(o);
+  for (const x of g) { const op = el("option", "👥 " + (x.nome || x.jid.split("@")[0])); op.value = x.jid; s.append(op); }
+  s.value = [...s.options].some(op => op.value === conversaAtual) ? conversaAtual : antes;
+}
+$("bt-conversa").onclick = async () => {
+  const v = $("sel-conversa").value;
+  if (v === conversaAtual) return;
+  const r = await fetch("/api/conversa-assistente", { method:"POST", headers:H, body: JSON.stringify({ valor: v }) });
+  if (!r.ok) { alert("Não foi possível salvar."); return; }
+  await atualizar(); carregarGrupos();
+  alert("Salvo! Agora mande !ativar na conversa escolhida para ligar os avisos.");
+};
+async function excluirPendencias(corpo) {
+  const r = await fetch("/api/pendencias/excluir", { method:"POST", headers:H, body: JSON.stringify(corpo) });
+  $("aviso-pend").textContent = r.ok ? ((await r.json()).excluidas + " excluída(s).") : "Não deu: " + await r.text();
+  carregarPendencias();
+}
+$("bt-excluir-todas").onclick = async () => {
+  const n = $("lista-pend").children.length;
+  if (!n) { $("aviso-pend").textContent = "Não há pendências."; return; }
+  if (!confirm("Excluir TODAS as " + n + " pendências? Isso não pode ser desfeito.")) return;
+  await excluirPendencias({ todas: true });
+};
+$("ck-notificar").onchange = async () => {
+  await fetch("/api/notificacoes", { method:"POST", headers:H, body: JSON.stringify({ ativar: $("ck-notificar").checked }) });
+  atualizar();
+};
+$("bt-testar-notif").onclick = async () => {
+  const r = await fetch("/api/notificacoes/testar", { method:"POST", headers:H });
+  if (!r.ok) alert("A notificação não apareceu: " + await r.text());
+};
+$("bt-seg-ligar").onclick = async () => {
+  if (!confirm("Ligar o segundo número? Vai aparecer um QR Code aqui: leia com o WhatsApp do OUTRO número (Aparelhos conectados → Conectar aparelho). Não use o seu número principal.")) return;
+  await fetch("/api/segundo-numero", { method:"POST", headers:H, body: JSON.stringify({ ativar:true }) });
+  atualizar();
+};
+$("bt-seg-desligar").onclick = async () => {
+  if (!confirm("Desligar e desvincular o segundo número? Os avisos voltam para a conversa do assistente.")) return;
+  await fetch("/api/segundo-numero", { method:"POST", headers:H, body: JSON.stringify({ ativar:false }) });
+  atualizar();
+};
+$("ck-windows").onchange = async () => {
+  const r = await fetch("/api/iniciar-com-windows", { method:"POST", headers:H, body: JSON.stringify({ ativar: $("ck-windows").checked }) });
+  if (!r.ok) alert("Não foi possível mudar esta opção.");
+  atualizar();
+};
+$("bt-fechar").onclick = async () => {
+  if (!confirm("Fechar o assistente? Ele para de ler as mensagens e de avisar até ser aberto de novo.")) return;
+  await fetch("/api/fechar", { method:"POST", headers:H });
+  setTimeout(atualizar, 1500);
+};
+$("bt-pausar").onclick = async () => { await fetch("/api/pausar", { method:"POST", headers:H, body: JSON.stringify({ pausado: !pausado }) }); atualizar(); };
+$("bt-apagar").onclick = async () => {
+  if (!confirm("Apagar TODAS as mensagens, resumos e pendências guardados pelo assistente? Isso não apaga nada no WhatsApp e não pode ser desfeito.")) return;
+  await fetch("/api/apagar-historico", { method:"POST", headers:H }); atualizar();
+};
+$("bt-desconectar").onclick = async () => {
+  if (!confirm("Desconectar este computador do seu WhatsApp e apagar a sessão? Para usar de novo será preciso ler outro QR Code.")) return;
+  await fetch("/api/desconectar", { method:"POST", headers:H }); atualizar();
+};
+
+atualizar(); carregarPendencias();
+setInterval(atualizar, 3000);
+setInterval(carregarPendencias, 30000);
+</script>
+</body>
+</html>

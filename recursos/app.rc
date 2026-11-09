@@ -1,0 +1,28 @@
+1 ICON "icone.ico"
+
+1 VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEOS 0x40004
+FILETYPE 0x1
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "CompanyName", "AjKaBaL"
+      VALUE "FileDescription", "Recado - assistente pessoal para WhatsApp"
+      VALUE "FileVersion", "1.0.0"
+      VALUE "InternalName", "Recado"
+      VALUE "LegalCopyright", "Copyright (c) 2026 AjKaBaL"
+      VALUE "OriginalFilename", "Recado.exe"
+      VALUE "ProductName", "Recado"
+      VALUE "ProductVersion", "1.0.0"
+      VALUE "Comments", "Projeto pessoal de AjKaBaL"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END
